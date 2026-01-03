@@ -1,6 +1,9 @@
 package com.algaworks.algasensors.device.management.api.controller;
 
+import com.algaworks.algasensors.device.management.api.client.SensorMonitoringClient;
+import com.algaworks.algasensors.device.management.api.model.SensorDetailOutput;
 import com.algaworks.algasensors.device.management.api.model.SensorInput;
+import com.algaworks.algasensors.device.management.api.model.SensorMonitoringOutput;
 import com.algaworks.algasensors.device.management.api.model.SensorOutput;
 import com.algaworks.algasensors.device.management.common.IdGenerator;
 import com.algaworks.algasensors.device.management.domain.model.Sensor;
@@ -20,8 +23,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/sensors")
 @RequiredArgsConstructor
 public class SensorController {
-
     private final SensorRepository sensorRepository;
+    private final SensorMonitoringClient sensorMonitoringClient;
 
     @GetMapping
     public Page<SensorOutput> getAll(@PageableDefault Pageable page){
@@ -36,6 +39,19 @@ public class SensorController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
         return convertSensorOutput(sensor);
+    }
+
+    @GetMapping("{sensorId}/detail")
+    public SensorDetailOutput getOneWithDetail(@PathVariable @Nonnull TSID sensorId){
+        Sensor sensor = sensorRepository.findById(new SensorID(sensorId))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+        SensorMonitoringOutput monitoring = sensorMonitoringClient.getDetail(sensorId);
+
+        return SensorDetailOutput.builder()
+                .sensorOutput(convertSensorOutput(sensor))
+                .sensorMonitoringOutput(monitoring)
+                .build();
     }
 
     @PostMapping
@@ -76,6 +92,7 @@ public class SensorController {
         sensor.setEnabled(Boolean.TRUE);
 
         convertSensorOutput(sensorRepository.save(sensor));
+        sensorMonitoringClient.enableMonitoring(sensorId);
     }
 
     @DeleteMapping("{sensorId}/enable")
@@ -87,6 +104,7 @@ public class SensorController {
         sensor.setEnabled(Boolean.FALSE);
 
         convertSensorOutput(sensorRepository.save(sensor));
+        sensorMonitoringClient.disableMonitoring(sensorId);
     }
 
     @DeleteMapping("{sensorId}")
@@ -96,6 +114,7 @@ public class SensorController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
         sensorRepository.delete(sensor);
+        sensorMonitoringClient.disableMonitoring(sensorId);
     }
 
     private void updateSensor(SensorInput sensorInput, Sensor sensor) {
